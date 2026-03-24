@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payphone Play-Along</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background: #2c3e50; color: white; }
+        .player-card { background: #34495e; padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); text-align: center; width: 500px; }
+        
+        .display-area { background: #1a252f; padding: 20px; border-radius: 15px; margin-bottom: 20px; border: 2px solid #4A90E2; position: relative; }
+        
+        /* Section Label Styling */
+        #current-section { font-size: 1em; color: #4A90E2; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 5px; height: 1.2em; }
+        
+        #current-chord { font-size: 4.5em; font-weight: bold; color: #f1c40f; margin: 0; line-height: 1.1; }
+        #beat-counter { font-size: 1.5em; color: #bdc3c7; letter-spacing: 10px; margin-top: 15px; }
+        .active-beat { color: #2ecc71; transform: scale(1.3); display: inline-block; text-shadow: 0 0 10px #2ecc71; }
+
+        .controls-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+        button { padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        .mode-btn { background: #95a5a6; color: white; }
+        .mode-btn.active { background: #4A90E2; box-shadow: 0 0 10px rgba(74,144,226,0.5); }
+        
+        .playback-row { display: flex; gap: 10px; }
+        .play-btn { background: #27ae60; color: white; flex: 2; font-size: 1.2em; }
+        .loop-btn { background: #8e44ad; color: white; flex: 1; }
+
+        input[type=range] { width: 100%; margin-top: 15px; accent-color: #4A90E2; cursor: pointer; }
+        .time { font-size: 0.85em; color: #bdc3c7; display: flex; justify-content: space-between; margin-top: 5px; }
+    </style>
+</head>
+<body>
+
+<div class="player-card">
+    <div class="display-area">
+        <div id="current-section">INTRO</div>
+        <p id="current-chord">---</p>
+        <div id="beat-counter">
+            <span id="b1">1</span> <span id="b2">2</span> <span id="b3">3</span> <span id="b4">4</span>
+        </div>
+    </div>
+
+    <div class="controls-grid">
+        <button class="mode-btn" onclick="changeTrack('full.mp3', this)">Full</button>
+        <button class="mode-btn" onclick="changeTrack('no-vocals.mp3', this)">No Vocals</button>
+        <button class="mode-btn" onclick="changeTrack('click-track.mp3', this)">With Click</button>
+        <button class="mode-btn" onclick="changeTrack('drumless.mp3', this)">Drumless</button>
+    </div>
+
+    <input type="range" id="seek-bar" value="0" step="0.01">
+    <div class="time"><span id="cur">0:00</span><span id="dur">0:00</span></div>
+
+    <div class="playback-row">
+        <button class="play-btn" id="play-btn" onclick="togglePlay()">PLAY</button>
+        <button class="loop-btn" id="loop-btn" onclick="toggleLoop()">Loop: OFF</button>
+    </div>
+    
+    <div style="text-align: left; margin-top: 20px;">
+        <label style="font-size: 0.8em; color: #bdc3c7;">MASTER VOLUME</label>
+        <input type="range" min="0" max="1" step="0.05" value="0.7" oninput="audio.volume=this.value">
+    </div>
+</div>
+
+<audio id="main-audio"></audio>
+
+<script>
+    const audio = document.getElementById('main-audio');
+    const chordDisplay = document.getElementById('current-chord');
+    const sectionDisplay = document.getElementById('current-section');
+    const playBtn = document.getElementById('play-btn');
+
+    // --- SECTION DATA ---
+    const sectionData = [
+        { time: 0, label: "Intro" },
+        { time: 8.7, label: "Chorus 1" },
+        { time: 26.3, label: "Verse 1" },
+        { time: 43.9, label: "Pre-Chorus" },
+        { time: 52.7, label: "Chorus 2" },
+        { time: 70.3, label: "Verse 2" }
+        // Add more as needed
+    ];
+    
+    // --- CHORD DATA (Payphone Loop) ---
+    const chordData = [
+        { time: 0, chord: "Wait..." },
+        { time: 2.1, chord: "F" }, { time: 4.3, chord: "C" }, { time: 6.5, chord: "Am" }, { time: 8.7, chord: "G" },
+        { time: 10.9, chord: "F" }, { time: 13.1, chord: "C" }, { time: 15.3, chord: "Am" }, { time: 17.5, chord: "G" },
+        { time: 19.7, chord: "F" }, { time: 21.9, chord: "C" }, { time: 24.1, chord: "Am" }, { time: 26.3, chord: "G" },
+        { time: 28.5, chord: "F" }, { time: 30.7, chord: "C" }, { time: 32.9, chord: "Am" }, { time: 35.1, chord: "G" },
+        { time: 37.3, chord: "F" }, { time: 39.5, chord: "C" }, { time: 41.7, chord: "Am" }, { time: 43.9, chord: "G" },
+        { time: 46.1, chord: "F" }, { time: 48.3, chord: "C" }, { time: 50.5, chord: "Am" }, { time: 52.7, chord: "G" },
+        { time: 54.9, chord: "F" }, { time: 57.1, chord: "C" }, { time: 59.3, chord: "Am" }, { time: 61.5, chord: "G" },
+        { time: 63.7, chord: "F" }, { time: 65.9, chord: "C" }, { time: 68.1, chord: "Am" }, { time: 70.3, chord: "G" }
+    ];
+
+    const bpm = 110; 
+    const secondsPerBeat = 60 / bpm;
+
+    function updateDisplay() {
+        const currentTime = audio.currentTime;
+
+        // 1. Update Sections
+        let activeSection = "Intro";
+        for (let s of sectionData) {
+            if (currentTime >= s.time) activeSection = s.label;
+        }
+        sectionDisplay.innerText = activeSection;
+
+        // 2. Update Chords
+        let activeChord = "---";
+        for (let c of chordData) {
+            if (currentTime >= c.time) activeChord = c.chord;
+        }
+        chordDisplay.innerText = activeChord;
+
+        // 3. Update 4/4 Beats (with tiny visual offset)
+        if (!audio.paused) {
+            const beatNumber = Math.floor((currentTime + 0.05) / secondsPerBeat) % 4 + 1;
+            for (let i = 1; i <= 4; i++) {
+                document.getElementById('b' + i).className = (i === beatNumber) ? 'active-beat' : '';
+            }
+        }
+
+        document.getElementById('seek-bar').value = currentTime;
+        document.getElementById('cur').innerText = formatTime(currentTime);
+    }
+
+    function changeTrack(file, btn) {
+        const time = audio.currentTime;
+        const playing = !audio.paused;
+        audio.src = file;
+        audio.currentTime = time;
+        if (playing) audio.play();
+        document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+    }
+
+    function togglePlay() {
+        if (!audio.src) return;
+        if (audio.paused) { audio.play(); playBtn.innerText = "PAUSE"; }
+        else { audio.pause(); playBtn.innerText = "PLAY"; }
+    }
+
+    function toggleLoop() {
+        audio.loop = !audio.loop;
+        document.getElementById('loop-btn').innerText = audio.loop ? "Loop: ON" : "Loop: OFF";
+        document.getElementById('loop-btn').classList.toggle('active');
+    }
+
+    audio.ontimeupdate = updateDisplay;
+    audio.onloadedmetadata = () => {
+        document.getElementById('seek-bar').max = audio.duration;
+        document.getElementById('dur').innerText = formatTime(audio.duration);
+    };
+    document.getElementById('seek-bar').oninput = (e) => audio.currentTime = e.target.value;
+
+    function formatTime(s) {
+        const m = Math.floor(s/60);
+        const sec = Math.floor(s%60);
+        return m + ":" + (sec < 10 ? '0' : '') + sec;
+    }
+</script>
+</body>
+</html>
